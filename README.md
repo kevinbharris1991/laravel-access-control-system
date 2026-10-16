@@ -1,12 +1,12 @@
 # laravel-access-control-system
 
-A Laravel 12 / PHP 8.2+ foundation for camp operations access control. Users
+A Laravel 13 / PHP 8.3+ foundation for camp operations access control. Users
 belong to one or more groups; groups grant explicit, granular permissions.
 No frontend toolchain or third-party authorization package is required.
 
 ## Get started
 
-Requires Composer, PHP with PDO SQLite (or a configured MySQL/PostgreSQL
+Requires Composer, PHP 8.3+ with PDO SQLite (or a configured MySQL/PostgreSQL
 connection), and the standard Laravel PHP extensions.
 
 ```sh
@@ -21,6 +21,23 @@ the application key, and migrates/seeds SQLite. For another database, configure
 secrets separately, set `APP_DEBUG=false`, use HTTPS, and run
 `php artisan migrate --seed --force` during deployment. Serve only the `public`
 directory, never the repository root.
+
+### Upgrading from Laravel 12
+
+Use PHP 8.3 or newer. The project now requires `laravel/framework ^13.17`
+and Laravel 13-compatible Tinker 3. Existing checkouts should run
+`composer install` to use the updated lockfile.
+
+If another project's root `composer.json` requires this repository as
+`dev-main` alongside `laravel/framework ^13.17`, refresh both packages with:
+
+```sh
+composer update kevinbharris1991/laravel-access-control-system laravel/framework --with-all-dependencies
+```
+
+The `-W` option permits locked dependency changes, but cannot reconcile
+incompatible constraints such as `^12.60` and `^13.17`; the package requirement
+must support Laravel 13 first.
 
 The user command prompts for a password (at least 12 characters) and confirmation,
 without placing it in shell history. Seeders **never create accounts or default
