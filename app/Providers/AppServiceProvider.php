@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Providers;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Providers;
 
-use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 
 class AppServiceProvider extends ServiceProvider
 {

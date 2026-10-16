@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\AccessControlController;
 use Illuminate\Support\Facades\Route;
+use Kevinbharris1991\LaravelAccessControlSystem\Http\Controllers\AccessControlController;
 
 Route::view('/', 'home');
 

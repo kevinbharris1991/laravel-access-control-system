@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Http\Controllers;
 
-use App\Models\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Group;
 
 class AccessControlController extends Controller
 {

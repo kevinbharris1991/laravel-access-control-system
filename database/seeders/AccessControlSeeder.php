@@ -1,12 +1,12 @@
 <?php
 
-namespace Database\Seeders;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Database\Seeders;
 
-use App\Models\Group;
-use App\Models\Permission;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Group;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Permission;
 
 class AccessControlSeeder extends Seeder
 {

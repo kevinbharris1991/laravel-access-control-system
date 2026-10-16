@@ -1,17 +1,19 @@
 <?php
 
-namespace Database\Factories;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Database\Factories;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 
 /**
  * @extends Factory<User>
  */
 class UserFactory extends Factory
 {
+    protected $model = User::class;
+
     /**
      * The current password being used by the factory.
      */
