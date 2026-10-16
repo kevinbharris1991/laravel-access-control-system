@@ -53,6 +53,12 @@ class User extends Authenticatable
     {
         // Keep insertion and membership atomic, including quiet saves that skip model events.
         return $this->getConnection()->transaction(function () use ($query) {
+            // SQLite has no SELECT FOR UPDATE; acquire its write lock before reading state.
+            if ($this->getConnection()->getDriverName() === 'sqlite') {
+                $this->getConnection()->table('access_control_state')
+                    ->where('id', 1)->update(['id' => 1]);
+            }
+
             $state = $this->getConnection()->table('access_control_state')
                 ->where('id', 1)->lockForUpdate()->first();
 
@@ -60,7 +66,10 @@ class User extends Authenticatable
                 throw new LogicException('Access control is not initialized. Run migrations and seeders.');
             }
 
-            $slug = $state->first_user_assigned ? Group::GUEST : Group::EXECUTIVE_DIRECTOR;
+            // Legacy users reserve ownership without changing any intentional memberships.
+            $hasExistingUsers = ! $state->first_user_assigned
+                && $this->newModelQuery()->lockForUpdate()->first([$this->getKeyName()]) !== null;
+            $slug = $state->first_user_assigned || $hasExistingUsers ? Group::GUEST : Group::EXECUTIVE_DIRECTOR;
             $group = Group::on($this->getConnectionName())->where('slug', $slug)->first();
 
             if ($group === null) {
@@ -71,7 +80,7 @@ class User extends Authenticatable
                 return false;
             }
 
-            $this->groups()->attach($group);
+            $this->groups()->syncWithoutDetaching([$group->getKey()]);
             $this->getConnection()->table('access_control_state')
                 ->where('id', 1)->update(['first_user_assigned' => true]);
 
