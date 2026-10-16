@@ -14,6 +14,7 @@ use Kevinbharris1991\LaravelAccessControlSystem\Models\Permission;
 use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 class AccessControlTest extends TestCase
@@ -98,6 +99,165 @@ class AccessControlTest extends TestCase
         } finally {
             User::flushEventListeners();
         }
+    }
+
+    public function test_public_creation_attributes_cannot_inject_privileges(): void
+    {
+        User::factory()->create();
+        $director = Group::where('slug', Group::EXECUTIVE_DIRECTOR)->firstOrFail();
+        $password = fake()->password(16, 20);
+        $user = User::create([
+            'name' => 'Guest',
+            'email' => 'guest@example.test',
+            'password' => $password,
+            'group_id' => $director->id,
+            'groups' => [$director->id],
+            'role' => 'executive-director',
+            'roles' => ['executive-director'],
+            'permissions' => ['group-memberships.update'],
+            'first_user_assigned' => false,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->assertSame([Group::GUEST], $user->groups()->pluck('slug')->all());
+        $this->assertFalse($user->hasPermission('group-memberships.update'));
+        $this->assertNull($user->email_verified_at);
+        $this->assertTrue(Hash::check($password, $user->password));
+    }
+
+    public function test_outer_transaction_rollback_does_not_consume_bootstrap(): void
+    {
+        try {
+            DB::transaction(function () {
+                User::factory()->create();
+                throw new RuntimeException('Abort registration');
+            });
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Abort registration', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('group_user', 0);
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => false]);
+        $this->assertSame([Group::EXECUTIVE_DIRECTOR], User::factory()->create()->groups()->pluck('slug')->all());
+    }
+
+    public function test_created_event_failure_rolls_back_insert_and_assignment(): void
+    {
+        User::created(fn () => throw new RuntimeException('Registration failed'));
+
+        try {
+            User::factory()->create();
+            $this->fail('The registration must fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Registration failed', $exception->getMessage());
+        } finally {
+            User::flushEventListeners();
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => false]);
+        $this->assertSame([Group::EXECUTIVE_DIRECTOR], User::factory()->create()->groups()->pluck('slug')->all());
+    }
+
+    public function test_overlapping_membership_hook_does_not_duplicate_assignment(): void
+    {
+        User::created(function (User $user) {
+            $user->groups()->syncWithoutDetaching([
+                Group::where('slug', Group::EXECUTIVE_DIRECTOR)->firstOrFail()->id,
+            ]);
+        });
+
+        try {
+            $user = User::factory()->create();
+        } finally {
+            User::flushEventListeners();
+        }
+
+        $this->assertSame([Group::EXECUTIVE_DIRECTOR], $user->groups()->pluck('slug')->all());
+        $this->assertDatabaseCount('group_user', 1);
+    }
+
+    public function test_existing_users_with_uninitialized_state_make_new_accounts_guests(): void
+    {
+        $existing = User::factory()->create();
+        $existing->groups()->sync(Group::where('slug', 'finance-accounting')->firstOrFail());
+        DB::table('access_control_state')->where('id', 1)->update(['first_user_assigned' => false]);
+
+        $new = User::factory()->create();
+
+        $this->assertSame([Group::GUEST], $new->groups()->pluck('slug')->all());
+        $this->assertSame(['finance-accounting'], $existing->groups()->pluck('slug')->all());
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => true]);
+    }
+
+    public function test_upgrade_reserves_bootstrap_without_reassigning_existing_users(): void
+    {
+        $existing = User::factory()->create();
+        $existing->groups()->sync(Group::where('slug', 'finance-accounting')->firstOrFail());
+        DB::table('access_control_state')->where('id', 1)->update(['first_user_assigned' => false]);
+
+        $migration = require database_path('migrations/2026_10_16_000001_initialize_access_control_bootstrap.php');
+        $migration->up();
+
+        $this->assertSame(['finance-accounting'], $existing->groups()->pluck('slug')->all());
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => true]);
+        $existing->delete();
+        $migration->down();
+        $migration->up();
+        $this->assertSame([Group::GUEST], User::factory()->create()->groups()->pluck('slug')->all());
+    }
+
+    public function test_upgrade_leaves_empty_installation_available_for_bootstrap(): void
+    {
+        $migration = require database_path('migrations/2026_10_16_000001_initialize_access_control_bootstrap.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => false]);
+        $this->assertSame([Group::EXECUTIVE_DIRECTOR], User::factory()->create()->groups()->pluck('slug')->all());
+    }
+
+    public function test_missing_bootstrap_state_fails_closed(): void
+    {
+        DB::table('access_control_state')->delete();
+
+        try {
+            User::factory()->create();
+            $this->fail('Missing bootstrap state must prevent creation.');
+        } catch (LogicException $exception) {
+            $this->assertStringContainsString('not initialized', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_missing_guest_group_does_not_create_an_ungrouped_account(): void
+    {
+        User::factory()->create();
+        Group::where('slug', Group::GUEST)->delete();
+
+        try {
+            User::factory()->create();
+            $this->fail('Missing Guest must prevent later account creation.');
+        } catch (LogicException $exception) {
+            $this->assertStringContainsString('php artisan db:seed', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => true]);
+        $this->seed(DatabaseSeeder::class);
+        $this->assertSame([Group::GUEST], User::factory()->create()->groups()->pluck('slug')->all());
+    }
+
+    public function test_profile_updates_preserve_intentional_memberships(): void
+    {
+        $user = User::factory()->create();
+        $user->groups()->sync(Group::where('slug', 'finance-accounting')->firstOrFail());
+
+        $user->update(['name' => 'Updated profile']);
+        $this->seed(DatabaseSeeder::class);
+
+        $this->assertSame(['finance-accounting'], $user->groups()->pluck('slug')->all());
     }
 
     public function test_new_groups_and_permissions_work_without_code_changes_and_revocations_are_immediate(): void
@@ -254,11 +414,17 @@ class AccessControlTest extends TestCase
         $this->assertTrue(Hash::check($password, $user->password));
         $this->assertSame([Group::EXECUTIVE_DIRECTOR], $user->groups()->pluck('slug')->all());
 
+        $this->artisan('access:create-user', ['name' => 'Later User', 'email' => 'later@example.test'])
+            ->expectsQuestion('Password', $password)
+            ->expectsQuestion('Confirm password', $password)
+            ->expectsOutput('Created later@example.test in Guest.')
+            ->assertSuccessful();
+
         $this->artisan('access:create-user', ['name' => 'Duplicate', 'email' => 'owner@example.test'])
             ->expectsQuestion('Password', $password)
             ->expectsQuestion('Confirm password', $password)
             ->assertFailed();
-        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('users', 2);
     }
 
     public function test_user_command_rejects_invalid_email_and_unconfirmed_short_password(): void

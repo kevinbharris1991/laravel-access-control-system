@@ -72,15 +72,46 @@ without placing it in shell history. Seeders **never create accounts or default
 passwords**. Create the first account through this trusted command before exposing
 any future registration endpoint.
 
-The first successfully inserted Eloquent user receives **Executive Director**.
+The first successfully committed Eloquent account receives **Executive Director**
+(the platform's Director group).
 Every later user receives **Guest**, including factory and quiet creation.
 Insertion, default membership, and a persistent bootstrap marker are transactional.
 The marker serializes concurrent creation on row-locking databases and is not
-reset when accounts are deleted or seeders rerun. SQLite may reject concurrent
-writes with a lock error; retry the entire creation request. Do not reset the
+reset when accounts are deleted or seeders rerun. SQLite acquires its write lock
+before reading the marker. If database contention exceeds the connection's lock
+timeout, retry the entire creation transaction. Do not reset the
 marker, use raw/bulk user inserts (which bypass Eloquent), or bypass this model
 when implementing registration/imports. Migrations and seeders must run before
 creating users; missing default groups fail closed with instructions to reseed.
+
+### Existing databases and registration integrations
+
+Deploy with account creation paused, back up the database, then run the normal
+`migrate --seed` deployment command above, **not `migrate:fresh`**. The
+`2026_10_16_000001_initialize_access_control_bootstrap` migration consumes
+bootstrap if users already exist. It does not assign, reset, or demote any
+existing membership, and rolling it back does not reopen bootstrap. A runtime
+check under the same bootstrap lock also treats existing users as established
+ownership if the marker is still false. Even if all those users are later
+deleted, new accounts remain Guests. If no Director is currently assigned,
+an operator must review ownership and explicitly grant the appropriate group
+through trusted administration; the next public signup is never promoted.
+
+This checkout's supported account-creation entry point is `access:create-user`,
+backed by `Kevinbharris1991\LaravelAccessControlSystem\Models\User`. It has no
+SecureAccess dependency, Fortify action, or public registration endpoint.
+The reported `2024_01_01_000006_create_secure_access_acl_tables` migration is
+not present here; do not copy it here or create a parallel Role system.
+Installing this scaffold in a SecureAccess host does not automatically connect
+the host's user model, registration flow, or ACL tables. That integration must
+be reviewed against the host's actual schema and creation paths separately.
+
+Future registration code using this model should validate and explicitly select
+only `name`, `email`, and `password`; the model also allowlists these fields for
+mass assignment and hashes passwords. Never fill relationship or privilege fields
+from public input. Assignment runs only on insertion, so subsequent profile saves
+preserve authorized membership changes. Existing authentication and verification
+behavior is unchanged.
 
 ## Try the protected endpoints
 
@@ -198,6 +229,7 @@ After local setup:
 
 ```sh
 php artisan test --filter=AccessControlTest
+php artisan test --filter=BootstrapConcurrencyTest
 composer test
 vendor/bin/pint --test
 composer dump-autoload --optimize --strict-psr --strict-ambiguous
@@ -206,5 +238,8 @@ composer audit
 
 Tests cover all default groups, permission denial, middleware short-circuiting,
 bootstrap assignment/rollback, reseeding, extensibility, and live revocation.
+The concurrency test uses two PHP processes and a temporary SQLite database;
+it skips when subprocesses or PDO SQLite are unavailable. MySQL/PostgreSQL
+row-lock behavior still needs validation on those database servers.
 The `User::performInsert` integration keeps membership atomic even when model
 events are disabled; retain these regression tests when upgrading Laravel.
