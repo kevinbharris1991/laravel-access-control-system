@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\User;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 
 return [
 

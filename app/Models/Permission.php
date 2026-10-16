@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;

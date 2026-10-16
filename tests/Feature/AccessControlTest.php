@@ -2,14 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\Group;
-use App\Models\Permission;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+use Kevinbharris1991\LaravelAccessControlSystem\Database\Factories\UserFactory;
+use Kevinbharris1991\LaravelAccessControlSystem\Database\Seeders\DatabaseSeeder;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Group;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Permission;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -21,7 +23,17 @@ class AccessControlTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed();
+        $this->seed(DatabaseSeeder::class);
+    }
+
+    public function test_namespaced_application_and_factory_are_resolved_explicitly(): void
+    {
+        $this->assertSame('Kevinbharris1991\\LaravelAccessControlSystem\\', $this->app->getNamespace());
+        $this->assertSame(User::class, config('auth.providers.users.model'));
+        $this->assertInstanceOf(UserFactory::class, User::factory());
+        $this->assertInstanceOf(User::class, UserFactory::new()->make());
+
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class])->assertSuccessful();
     }
 
     public function test_seeding_is_repeatable_and_preserves_custom_grants_without_creating_users(): void
@@ -31,7 +43,7 @@ class AccessControlTest extends TestCase
         $group->permissions()->attach($permission);
         $counts = [Group::count(), Permission::count(), DB::table('group_permission')->count()];
 
-        $this->seed();
+        $this->seed(DatabaseSeeder::class);
 
         $this->assertSame(12, Group::count());
         $this->assertSame($counts, [Group::count(), Permission::count(), DB::table('group_permission')->count()]);
@@ -53,7 +65,7 @@ class AccessControlTest extends TestCase
     public function test_deleting_all_users_and_reseeding_does_not_reopen_executive_bootstrap(): void
     {
         User::factory()->create()->delete();
-        $this->seed();
+        $this->seed(DatabaseSeeder::class);
 
         $this->assertSame([Group::GUEST], User::factory()->create()->groups()->pluck('slug')->all());
     }
@@ -71,7 +83,7 @@ class AccessControlTest extends TestCase
             $this->assertDatabaseHas('access_control_state', ['id' => 1, 'first_user_assigned' => false]);
         }
 
-        $this->seed();
+        $this->seed(DatabaseSeeder::class);
         $this->assertSame([Group::EXECUTIVE_DIRECTOR], User::factory()->create()->groups()->pluck('slug')->all());
     }
 

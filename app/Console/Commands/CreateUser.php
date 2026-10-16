@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Console\Commands;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Console\Commands;
 
-use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
 
 class CreateUser extends Command
 {

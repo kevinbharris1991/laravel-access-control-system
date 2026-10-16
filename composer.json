@@ -21,9 +21,9 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "app/",
-            "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
+            "Kevinbharris1991\\LaravelAccessControlSystem\\": "app/",
+            "Kevinbharris1991\\LaravelAccessControlSystem\\Database\\Factories\\": "database/factories/",
+            "Kevinbharris1991\\LaravelAccessControlSystem\\Database\\Seeders\\": "database/seeders/"
         }
     },
     "autoload-dev": {
@@ -37,7 +37,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "@php artisan migrate --seed"
+            "@php artisan migrate --seed --seeder=\"Kevinbharris1991\\LaravelAccessControlSystem\\Database\\Seeders\\DatabaseSeeder\""
         ],
         "dev": [
             "@php artisan serve"

@@ -19,7 +19,8 @@ composer dev
 the application key, and migrates/seeds SQLite. For another database, configure
 `.env` before running setup. Setup is for local development; provision production
 secrets separately, set `APP_DEBUG=false`, use HTTPS, and run
-`php artisan migrate --seed --force` during deployment. Serve only the `public`
+`php artisan migrate --seed --seeder="Kevinbharris1991\LaravelAccessControlSystem\Database\Seeders\DatabaseSeeder" --force`
+during deployment. Serve only the `public`
 directory, never the repository root.
 
 ### Upgrading from Laravel 12
@@ -38,6 +39,33 @@ composer update kevinbharris1991/laravel-access-control-system laravel/framework
 The `-W` option permits locked dependency changes, but cannot reconcile
 incompatible constraints such as `^12.60` and `^13.17`; the package requirement
 must support Laravel 13 first.
+
+### Composer class-name collisions
+
+Application classes now use `Kevinbharris1991\LaravelAccessControlSystem\`,
+with factories and seeders under its `Database\Factories` and `Database\Seeders`
+namespaces. This avoids exporting a second application's `App\` or `Database\`
+classes when this repository is installed as a Composer dependency.
+
+In an existing consuming application, update the installed revision and rebuild
+the autoloader:
+
+```sh
+composer update kevinbharris1991/laravel-access-control-system --with-all-dependencies
+composer dump-autoload --optimize
+```
+
+Update references to this project's former `App\` and `Database\` classes to the
+new namespaces; do not rename the consuming application's own classes.
+When seeding this project's tables directly, specify its seeder explicitly:
+
+```sh
+php artisan db:seed --class="Kevinbharris1991\LaravelAccessControlSystem\Database\Seeders\DatabaseSeeder"
+```
+
+This repository remains an application scaffold, not an auto-configuring Laravel
+package: installing it as a dependency does not register its provider, routes,
+configuration, or migrations in the consuming application.
 
 The user command prompts for a password (at least 12 characters) and confirmation,
 without placing it in shell history. Seeders **never create accounts or default
@@ -133,12 +161,16 @@ Multiple `can` middleware entries require all listed grants. Do not use
 Use trusted `php artisan tinker` for initial administration:
 
 ```php
-$user = App\Models\User::where('email', 'owner@example.test')->firstOrFail();
-$admin = App\Models\Group::where('slug', 'administrative-directors')->firstOrFail();
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Group;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\Permission;
+use Kevinbharris1991\LaravelAccessControlSystem\Models\User;
+
+$user = User::where('email', 'owner@example.test')->firstOrFail();
+$admin = Group::where('slug', 'administrative-directors')->firstOrFail();
 $user->groups()->syncWithoutDetaching([$admin->id]);
 
-$group = App\Models\Group::create(['slug' => 'volunteers', 'name' => 'Volunteers']);
-$permission = App\Models\Permission::firstOrCreate(
+$group = Group::create(['slug' => 'volunteers', 'name' => 'Volunteers']);
+$permission = Permission::firstOrCreate(
     ['slug' => 'volunteer-roster.read'],
     ['name' => 'Read volunteer roster'],
 );
@@ -168,6 +200,7 @@ After local setup:
 php artisan test --filter=AccessControlTest
 composer test
 vendor/bin/pint --test
+composer dump-autoload --optimize --strict-psr --strict-ambiguous
 composer audit
 ```
 

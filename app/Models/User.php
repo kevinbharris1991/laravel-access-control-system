@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Models;
+namespace Kevinbharris1991\LaravelAccessControlSystem\Models;
 
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Kevinbharris1991\LaravelAccessControlSystem\Database\Factories\UserFactory;
+use Kevinbharris1991\LaravelAccessControlSystem\Database\Seeders\DatabaseSeeder;
 use LogicException;
 
 class User extends Authenticatable
@@ -63,7 +64,7 @@ class User extends Authenticatable
             $group = Group::on($this->getConnectionName())->where('slug', $slug)->first();
 
             if ($group === null) {
-                throw new LogicException('Default group missing. Run php artisan db:seed before creating users.');
+                throw new LogicException('Default group missing. Run php artisan db:seed --class="'.DatabaseSeeder::class.'" before creating users.');
             }
 
             if (! parent::performInsert($query)) {
@@ -76,6 +77,11 @@ class User extends Authenticatable
 
             return true;
         });
+    }
+
+    protected static function newFactory(): UserFactory
+    {
+        return UserFactory::new();
     }
 
     /**
